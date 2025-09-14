@@ -1,0 +1,17 @@
+hls: yes
+hlsAlwaysRemux: yes
+rtspAddress: :8554
+rtmpAddress: :1935
+hlsAddress: :8888
+
+paths:
+  merged:
+    # Enable on-demand streaming if needed
+    runOnDemand: ""
+    # Allow RTMP publishing
+    publish: yes
+    # Optional: enable HLS and RTSP output for this path
+    hls: yes
+    rtsp: yes
+    # Optional: set a default record folder (if you want to record)
+    record: ""
