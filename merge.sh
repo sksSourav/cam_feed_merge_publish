@@ -73,4 +73,5 @@ exec ffmpeg \
   -filter_complex "$FILTER" -map "[vout]" \
   -r "$FRAMERATE" -g "$GOP" -b:v "$VIDEO_BITRATE" \
   "${ENC_OPTS[@]}" -an \
+  ... -bsf:v h264_mp4toannexb \
   -f tee "$OUTS"
