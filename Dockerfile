@@ -3,21 +3,20 @@ FROM linuxserver/ffmpeg
 ARG DEBIAN_FRONTEND=noninteractive
 ARG MTX_VERSION=1.9.1
 
-# Install ffmpeg + tools
-RUN apt-get clean
-RUN apt-get update
-# RUN apt-get install -y --no-install-recommends software-properties-common
-# RUN add-apt-repository universe
-# RUN apt-get update
-# RUN apt-get install -y --no-install-recommends ffmpeg
-RUN apt-get install -y --no-install-recommends python3
-RUN apt-get install -y --no-install-recommends curl
-RUN apt-get install -y --no-install-recommends ca-certificates
-RUN apt-get install -y --no-install-recommends xz-utils
-RUN apt-get install -y --no-install-recommends librtmp1
+# Install utilities needed at runtime for orchestration and health checks
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        python3 \
+        curl \
+        ca-certificates \
+        xz-utils \
+        librtmp1 \
+        netcat-openbsd \
+    ; \
+    rm -rf /var/lib/apt/lists/*;
 
-# RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|http://mirrors.edge.kernel.org/ubuntu/|g' /etc/apt/sources.list
-
+# Download MediaMTX binary for the container architecture and make sure it's executable
 RUN set -eux; \
     ARCH="$(dpkg --print-architecture)"; \
     if [ "$ARCH" = "amd64" ]; then \
@@ -27,20 +26,19 @@ RUN set -eux; \
     else \
         echo "Unsupported arch: $ARCH" && exit 1; \
     fi; \
-    curl -L "$MTX_URL" | tar xz -C /usr/local/bin
-
+    curl -fL "$MTX_URL" | tar xz -C /usr/local/bin; \
+    chmod +x /usr/local/bin/mediamtx || true
 
 WORKDIR /app
 
-# Copy configs
+# Copy configs and scripts
 COPY merge.sh /app/merge.sh
 COPY mediamtx.yml /app/mediamtx.yml
 COPY entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/merge.sh
-RUN chmod +x /app/entrypoint.sh
+RUN chmod +x /app/merge.sh /app/entrypoint.sh
 
-# Expose ports
+# Expose ports for RTSP, RTMP and optional HLS
 EXPOSE 8554 1935 8888
 
-# Start MediaMTX + merge
+# Start MediaMTX + merger
 ENTRYPOINT ["/app/entrypoint.sh"]
