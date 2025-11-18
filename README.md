@@ -12,7 +12,6 @@ Quick start (build locally):
 
 ```bash
 # Build multi-arch image (requires docker buildx)
-docker buildx create --use --name multiarch || true
 docker buildx inspect --bootstrap
 docker buildx build --platform linux/amd64,linux/arm64 --pull -t 43124312/cam-feed-merge-publish:latest --push .
 ```
