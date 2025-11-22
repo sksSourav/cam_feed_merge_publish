@@ -40,5 +40,9 @@ RUN chmod +x /app/merge.sh /app/entrypoint.sh
 # Expose ports for RTSP, RTMP and optional HLS
 EXPOSE 8554 1935 8888
 
+# Healthcheck to ensure MediaMTX is listening
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD nc -z 127.0.0.1 8554 || exit 1
+
 # Start MediaMTX + merger
 ENTRYPOINT ["/app/entrypoint.sh"]

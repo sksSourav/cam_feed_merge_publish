@@ -24,6 +24,11 @@ YOUTUBE_KEY="${YOUTUBE_KEY:-}"
 # - none: drop all audio (default for backwards compatibility historically 'an')
 # - first: pass-through audio from first input (safe; uses "-map 0:a?" so missing audio doesn't fail)
 # - mix: (not implemented robustly) fallback to 'first' for now
+PRESERVE_ASPECT="${PRESERVE_ASPECT:-false}"
+# AUDIO_MODE: none|first|mix
+# - none: drop all audio
+# - first: pass-through audio from first input
+# - mix: mix audio from all inputs (requires inputs to have audio)
 AUDIO_MODE="${AUDIO_MODE:-first}"
 
 N=${#CAM_LIST[@]}
@@ -51,7 +56,14 @@ done
 scale_parts=()
 layouts=()
 for i in $(seq 0 $((GRID - 1))); do
-  scale_parts+=("[$i:v]setpts=PTS-STARTPTS,scale=${TILE_W}:${TILE_H}[v${i}]")
+  if [ "$PRESERVE_ASPECT" = "true" ]; then
+    # Scale to fit within tile, then pad to fill tile
+    scale_parts+=("[$i:v]setpts=PTS-STARTPTS,scale=${TILE_W}:${TILE_H}:force_original_aspect_ratio=decrease,pad=${TILE_W}:${TILE_H}:(ow-iw)/2:(oh-ih)/2[v${i}]")
+  else
+    # Stretch to fill tile
+    scale_parts+=("[$i:v]setpts=PTS-STARTPTS,scale=${TILE_W}:${TILE_H}[v${i}]")
+  fi
+  
   row=$(( i / cols ))
   col=$(( i % cols ))
   x=$(( col * TILE_W ))
@@ -77,6 +89,21 @@ done
 
 layout_str=$(IFS='|'; echo "${layouts[*]}")
 filter_complex="${filter_scale};${label_concat}xstack=inputs=${GRID}:layout=${layout_str}:fill=black[vout]"
+
+# Handle Audio Mixing in filter_complex if needed
+if [ "$AUDIO_MODE" = "mix" ]; then
+  # We only mix the actual camera inputs (0 to N-1)
+  # We assume they have audio. If not, this might fail or be silent.
+  # To be safe, we construct a mix filter.
+  audio_inputs=""
+  for ((i = 0; i < N; i++)); do
+    audio_inputs="${audio_inputs}[$i:a]"
+  done
+  # Append amix to filter_complex
+  # We use a separate filter chain for audio? No, filter_complex can handle both.
+  # But we need to output [aout]
+  filter_complex="${filter_complex};${audio_inputs}amix=inputs=${N}:duration=longest[aout]"
+fi
 
 # Encoder options
 ENC_OPTS=()
@@ -112,10 +139,8 @@ case "$AUDIO_MODE" in
     AUDIO_MAP_OPTS+=( -map 0:a? )
     ;;
   mix)
-    # Complex mixing of audio streams is non-trivial when inputs may lack audio.
-    # For now fallback to first with a warning. Future improvement: add per-input anullsrc and amix.
-    echo "AUDIO_MODE=mix requested but not fully supported; falling back to 'first'"
-    AUDIO_MAP_OPTS+=( -map 0:a? )
+    # Map the mixed audio from filter_complex
+    AUDIO_MAP_OPTS+=( -map "[aout]" -c:a aac )
     ;;
   *)
     echo "Unknown AUDIO_MODE='$AUDIO_MODE', defaulting to 'first'"
